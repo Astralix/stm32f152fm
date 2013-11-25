@@ -54,14 +54,51 @@ SysTick_Handler(void);
 #define LD_BLUE_GPIO_PIN        GPIO_Pin_6
 #define LD_GPIO_PORT_CLK        RCC_AHBPeriph_GPIOB
 
-#define MCO_GPIO_PORT			GPIOA
-#define MCO_GPIO_PIN			GPIO_Pin_8
-#define MCO_GPIO_PORT_CLK		RCC_AHBPeriph_GPIOA
-
+#define I2C_GPIO_PORT			GPIOB
+#define I2C_SDA_GPIO_PIN		GPIO_Pin_9
+#define I2C_SCL_GPIO_PIN		GPIO_Pin_8
+#define I2C_GPIO_PORT_CLK		RCC_AHBPeriph_GPIOB
 
 #define BLINK_TICKS     SYSTICK_FREQUENCY_HZ/2
 
 /* ------------------------------------------------------------------------- */
+
+int i2c_transact( uint8_t ic, uint16_t addr,
+		uint8_t *txb, uint8_t txl,
+		uint8_t *rxb, uint8_t rxl )
+{
+	if( txb && txl) {
+		I2C_GenerateSTART( I2C1, ENABLE);
+		I2C_Send7bitAddress( I2C1, ic, I2C_Direction_Transmitter);
+	}
+	else if( rxb && rxl) {
+		I2C_GenerateSTART( I2C1, ENABLE);
+		I2C_Send7bitAddress( I2C1, ic, I2C_Direction_Receiver);
+	}
+	else {
+		goto error_out;
+	}
+
+	while ( txl) {
+		I2C_SendData( I2C1, *txb++);
+		--txl;
+	}
+	if(rxb && rxl) {
+		I2C_GenerateSTART( I2C1, ENABLE);
+		while( rxl) {
+			*rxb++ = I2C_ReceiveData( I2C1);
+			--rxl;
+		}
+	}
+	I2C_GenerateSTOP( I2C1, ENABLE);
+
+	return 0;
+error_out:
+	return -1;
+}
+
+/* ------------------------------------------------------------------------- */
+
 
 int
 main(void)
@@ -100,18 +137,30 @@ main(void)
 	GPIO_ResetBits(LD_GPIO_PORT, LD_GREEN_GPIO_PIN);
 	GPIO_ResetBits(LD_GPIO_PORT, LD_BLUE_GPIO_PIN);
 
-	/* GPIO Periph clock enable for MCO */
-	RCC_AHBPeriphClockCmd(MCO_GPIO_PORT_CLK, ENABLE);
+	/* GPIO Periph clock enable for I2C */
+	RCC_AHBPeriphClockCmd(I2C_GPIO_PORT_CLK, ENABLE);
 
-	GPIO_InitStructure.GPIO_Pin = MCO_GPIO_PIN;
+	GPIO_InitStructure.GPIO_Pin = I2C_SDA_GPIO_PIN | I2C_SCL_GPIO_PIN;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
-	GPIO_Init(MCO_GPIO_PORT, &GPIO_InitStructure);
+	GPIO_InitStructure.GPIO_OType = GPIO_OType_OD;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_Init(I2C_GPIO_PORT, &GPIO_InitStructure);
 
-	GPIO_PinAFConfig(GPIOA, GPIO_PinSource8, GPIO_AF_MCO);
-	RCC_MCOConfig(RCC_MCOSource_SYSCLK , RCC_MCODiv_8);
+	/* I2C Periph clock enable */
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1, ENABLE);
+
+	/* Switch GPIO alternate functions */
+	GPIO_PinAFConfig(I2C_GPIO_PORT, GPIO_PinSource8, GPIO_AF_I2C1);
+	GPIO_PinAFConfig(I2C_GPIO_PORT, GPIO_PinSource9, GPIO_AF_I2C1);
+
+	/* Initialize I2C subsystem */
+	I2C_InitTypeDef I2C_InitStructure;
+	I2C_StructInit( &I2C_InitStructure);
+	// I2C_InitStructure.I2C_ClockSpeed = 400;
+	I2C_Init( I2C1, &I2C_InitStructure);
+
+	RCC_I2CConfig();
 
 	int seconds = 0;
 

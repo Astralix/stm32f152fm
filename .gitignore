@@ -21,3 +21,4 @@
 # Backups & logs
 *~
 *.log
+/Debug
