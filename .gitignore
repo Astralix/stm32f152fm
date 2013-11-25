@@ -1,6 +1,7 @@
 # Object files
 *.o
 *.ko
+*.d
 
 # Libraries
 *.lib
@@ -16,3 +17,7 @@
 *.exe
 *.out
 *.app
+
+# Backups & logs
+*~
+*.log
